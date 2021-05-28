@@ -25,8 +25,9 @@ plugins {
     java
     idea
     antlr
-    kotlin("jvm") version "1.4.21"
-    kotlin("kapt") version "1.4.21"
+    kotlin("jvm") version "1.4.31"
+    kotlin("kapt") version "1.4.31"
+    id("me.champeau.gradle.jmh") version "0.5.3"
 }
 
 val compiler: Configuration by configurations.creating
@@ -35,6 +36,9 @@ val graalVersion = "21.1.0"
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
+
+    jmh("org.openjdk.jmh:jmh-core:1.32")
+    kaptJmh("org.openjdk.jmh:jmh-generator-annprocess:1.32")
 
     antlr("org.antlr:antlr4:4.7.2")
     api("org.antlr:antlr4-runtime:4.7.2")
@@ -83,29 +87,7 @@ tasks.generateGrammarSource {
 
 sourceSets {
     main {
-        java.srcDir("src/main")
         java.srcDir("build/generated-src/antlr/main")
-        kotlin.srcDir("src/main")
-    }
-    test {
-        kotlin.srcDirs("test")
-    }
-    val bench by creating {
-        dependencies {
-            "kaptBench"("org.openjdk.jmh:jmh-generator-annprocess:1.22")
-        }
-        java.srcDir("bench")
-        kotlin.srcDir("bench")
-        kotlin {
-            dependencies {
-                implementation(kotlin("stdlib"))
-                implementation("org.openjdk.jmh:jmh-core:1.22")
-            }
-        }
-        compileClasspath += sourceSets["main"].output
-        runtimeClasspath += sourceSets["main"].output
-        compileClasspath += configurations.runtimeClasspath.get()
-        runtimeClasspath += configurations.runtimeClasspath.get()
     }
 }
 
@@ -119,8 +101,6 @@ application {
         "-Dtruffle.class.path.append=lib/montuno.jar"
     )
 }
-
-var rootBuildDir = project.buildDir
 
 val graalArgs = listOf(
     "-Xss32m",
@@ -157,12 +137,8 @@ tasks.test {
     jvmArgs = graalArgs
 }
 
-tasks.register("bench", JavaExec::class) {
-    dependsOn("benchClasses", "jar")
-//  dependsOn(sourceSets["bench"].getJarTaskName())
-    classpath = sourceSets["bench"].runtimeClasspath + sourceSets["bench"].compileClasspath
-    main = "org.openjdk.jmh.Main"
-    jvmArgs = graalArgs
+jmh {
+    jvmArgsPrepend = graalArgs
 }
 
 tasks.replace("run", JavaExec::class.java).run {

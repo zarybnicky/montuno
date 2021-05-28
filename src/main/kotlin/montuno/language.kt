@@ -4,6 +4,7 @@ import com.oracle.truffle.api.*
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.RootNode
+import com.oracle.truffle.api.source.Source
 import montuno.interpreter.MontunoContext
 import montuno.interpreter.VUnit
 import montuno.interpreter.checkTopLevel
@@ -34,7 +35,7 @@ class MontunoTruffle : Montuno() {
         context.compiler = TruffleCompiler(context)
     }
     companion object {
-        val lang: TruffleLanguage<MontunoContext> get() = getCurrentLanguage(MontunoTruffle::class.java)
+        val lang: MontunoTruffle get() = getCurrentLanguage(MontunoTruffle::class.java)
         val top: MontunoContext get() = getCurrentContext(MontunoTruffle::class.java)
         const val LANGUAGE_ID = "montuno"
         const val MIME_TYPE = "application/x-montuno"
@@ -59,6 +60,7 @@ class MontunoPure : Montuno() {
         context.compiler = PureCompiler(context)
     }
     companion object {
+        val lang: MontunoPure get() = getCurrentLanguage(MontunoPure::class.java)
         val top: MontunoContext get() = getCurrentContext(MontunoPure::class.java)
         const val LANGUAGE_ID = "montuno-pure"
         const val MIME_TYPE = "application/x-montuno-pure"
@@ -71,9 +73,10 @@ abstract class Montuno : TruffleLanguage<MontunoContext>() {
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean) = true
     override fun isObjectOfLanguage(obj: Any): Boolean = false
     override fun getScope(ctx: MontunoContext) = ctx.top
-    override fun parse(request: ParsingRequest): CallTarget {
+    override fun parse(request: ParsingRequest): CallTarget = parse(request.source) // todo request.argumentNames
+    fun parse(source: Source): CallTarget {
         CompilerAsserts.neverPartOfCompilation()
-        val root = ProgramRootNode(this, getCurrentContext(this.javaClass), parsePreSyntax(request.source))
+        val root = ProgramRootNode(this, getCurrentContext(this.javaClass), parsePreSyntax(source))
         return Truffle.getRuntime().createCallTarget(root)
     }
 }

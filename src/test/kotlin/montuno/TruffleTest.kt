@@ -24,6 +24,12 @@ class TruffleTest {
     }
 
     @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
+    fun testCountTo1000(lang: String) = makeCtx().use { ctx ->
+        val x = ctx.eval(lang, "fixNatF (\\rec x. if leq 999 x then x else rec (add x 1)) 0")
+        assert(x.asString() == "1000")
+    }
+
+    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
     fun testPolyglotClosure(lang: String) = makeCtx().use { ctx ->
         assert(ctx.eval(lang, "\\x.x").execute(5).asInt() == 5)
     }

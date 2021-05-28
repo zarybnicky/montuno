@@ -6,6 +6,7 @@ import com.oracle.truffle.api.dsl.TypeCheck
 import com.oracle.truffle.api.dsl.TypeSystem
 import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.interop.TruffleObject
+import com.oracle.truffle.api.interop.UnsupportedMessageException
 import com.oracle.truffle.api.library.ExportLibrary
 import com.oracle.truffle.api.library.ExportMessage
 import montuno.Ix
@@ -218,10 +219,27 @@ object VUnit : Val() {
 @ExportLibrary(InteropLibrary::class)
 data class VNat(val n: Int) : Val() {
     @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = "VNat($n)"
+    @ExportMessage fun isNumber() = true
+    @ExportMessage fun fitsInByte() = n >= Byte.MIN_VALUE && n <= Byte.MAX_VALUE
+    @ExportMessage fun fitsInShort() = n >= Short.MIN_VALUE && n <= Short.MAX_VALUE
+    @ExportMessage fun fitsInInt() = true
+    @ExportMessage fun fitsInLong() = true
+    @ExportMessage fun fitsInFloat() = true
+    @ExportMessage fun fitsInDouble() = true
+    @Throws(UnsupportedMessageException::class)
+    @ExportMessage fun asByte(): Byte = if (fitsInByte()) n.toByte() else throw UnsupportedMessageException.create()
+    @Throws(UnsupportedMessageException::class)
+    @ExportMessage fun asShort(): Short = if (fitsInShort()) n.toShort() else throw UnsupportedMessageException.create()
+    @ExportMessage fun asInt() = n
+    @ExportMessage fun asLong(): Long = n.toLong()
+    @ExportMessage fun asFloat(): Float = n.toFloat()
+    @ExportMessage fun asDouble(): Double = n.toDouble()
 }
 
 @CompilerDirectives.ValueType
 @ExportLibrary(InteropLibrary::class)
 data class VBool(val n: Boolean) : Val() {
     @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = "VBool($n)"
+    @ExportMessage fun isBoolean() = true
+    @ExportMessage fun asBoolean() = n
 }
