@@ -18,8 +18,6 @@ import montuno.truffle.*
 @TypeSystemReference(Types::class)
 class BuiltinRootNode(@field:Child var node: BuiltinNode, lang: TruffleLanguage<*>) : RootNode(lang) {
     override fun execute(frame: VirtualFrame): Any? = node.run(frame, frame.arguments)
-    fun getClosure(ctx: MontunoContext) = TruffleClosure(ctx, emptyArray(), emptyArray(), 1, callTarget)
-    fun getConstClosure() = ConstClosure(emptyArray(), emptyArray(), 1, callTarget)
     init {
         callTarget = Truffle.getRuntime().createCallTarget(this)
     }
@@ -112,11 +110,19 @@ class BuiltinScope(val ctx: MontunoContext) {
 
     // utilities for creating builtins
     private fun const(v: Val): RootNode = TruffleRootNode(arrayOf(CConstant(v, null)), ctx.top.lang, FrameDescriptor())
-    private fun fromHeads(ct: RootNode, vararg hs: ConstHead): Val {
+    private fun fromHeads(vararg hs: ConstHead, root: RootNode): Val {
         val h = hs.first()
         val hRest = hs.drop(1).toTypedArray()
-        return h.toVal(h.bound, ConstClosure(emptyArray(), hRest, hRest.size + 1, ct.callTarget))
+        return h.toVal(h.bound, ConstClosure(emptyArray(), hRest, hRest.size + 1, root.callTarget))
     }
+    private fun buildLam(vararg bs: Builtin, root: BuiltinNode): Val = fromHeads(
+        *bs.map { ConstHead(false, null, Icit.Expl, ctx.getBuiltinVal(it.name)) }.toTypedArray(),
+        root=BuiltinRootNode(root, ctx.top.lang)
+    )
+    private fun buildPi(vararg bs: Builtin, root: Builtin): Val = fromHeads(
+        *bs.map { ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal(it.name)) }.toTypedArray(),
+        root=const(ctx.getBuiltinVal(root.name))
+    )
 
     private fun createBuiltinValue(n: Builtin): Val? = when (n) {
         Builtin.Nat -> VUnit
@@ -124,50 +130,18 @@ class BuiltinScope(val ctx: MontunoContext) {
         Builtin.True -> VBool(true)
         Builtin.False -> VBool(false)
         Builtin.zero -> VNat(0)
-        Builtin.succ -> fromHeads(
-            BuiltinRootNode(SuccBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.add -> fromHeads(
-            BuiltinRootNode(AddBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "y", Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.sub -> fromHeads(
-            BuiltinRootNode(SubBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "y", Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.natElim -> fromHeads(
-            BuiltinRootNode(NatElimBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "y", Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(false, "x", Icit.Expl, getType(Builtin.succ))
-        )
-        Builtin.leqn -> fromHeads(
-            BuiltinRootNode(LeqnBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(false, "y", Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.geqn -> fromHeads(
-            BuiltinRootNode(GeqnBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(false, "y", Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.eqn -> fromHeads(
-            BuiltinRootNode(EqnBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(false, "y", Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.cond -> fromHeads(
-            BuiltinRootNode(CondBuiltinNodeGen.create(), ctx.top.lang),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Bool")),
-            ConstHead(false, "y", Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(false, "z", Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
+        Builtin.succ -> buildLam(Builtin.Nat, root=SuccBuiltinNodeGen.create())
+        Builtin.add -> buildLam(Builtin.Nat, Builtin.Nat, root=AddBuiltinNodeGen.create())
+        Builtin.sub -> buildLam(Builtin.Nat, Builtin.Nat, root=SubBuiltinNodeGen.create())
+        Builtin.natElim -> buildLam(Builtin.Nat, Builtin.succ, root=NatElimBuiltinNodeGen.create())
+        Builtin.leqn -> buildLam(Builtin.Nat, Builtin.Nat, root=LeqnBuiltinNodeGen.create())
+        Builtin.geqn -> buildLam(Builtin.Nat, Builtin.Nat, root=GeqnBuiltinNodeGen.create())
+        Builtin.eqn -> buildLam(Builtin.Nat, Builtin.Nat, root=EqnBuiltinNodeGen.create())
+        Builtin.cond -> buildLam(Builtin.Bool, Builtin.Nat, Builtin.Nat, root=CondBuiltinNodeGen.create())
         Builtin.fixNatF -> fromHeads(
-            BuiltinRootNode(FixNatFNodeGen.create(ctx.top.lang), ctx.top.lang),
             ConstHead(false, "f", Icit.Expl, getType(Builtin.fixNatF)),
-            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat"))
+            ConstHead(false, "x", Icit.Expl, ctx.getBuiltinVal("Nat")),
+            root=BuiltinRootNode(FixNatFNodeGen.create(ctx.top.lang), ctx.top.lang),
         )
     }
     private fun createBuiltinType(n: Builtin): Val = when (n) {
@@ -176,54 +150,22 @@ class BuiltinScope(val ctx: MontunoContext) {
         Builtin.True -> ctx.getBuiltinVal("Bool")
         Builtin.False -> ctx.getBuiltinVal("Bool")
         Builtin.zero -> ctx.getBuiltinVal("Nat")
-        Builtin.succ -> fromHeads(
-            const(ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.add -> fromHeads(
-            const(ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.sub -> fromHeads(
-            const(ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.natElim -> fromHeads(
-            const(ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, getType(Builtin.succ))
-        )
-        Builtin.leqn -> fromHeads(
-            const(ctx.getBuiltinVal("Bool")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.geqn -> fromHeads(
-            const(ctx.getBuiltinVal("Bool")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.eqn -> fromHeads(
-            const(ctx.getBuiltinVal("Bool")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
-        Builtin.cond -> fromHeads(
-            const(ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Bool")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
-        )
+        Builtin.succ -> buildPi(Builtin.Nat, root=Builtin.Nat)
+        Builtin.add -> buildPi(Builtin.Nat, Builtin.Nat, root=Builtin.Nat)
+        Builtin.sub -> buildPi(Builtin.Nat, Builtin.Nat, root=Builtin.Nat)
+        Builtin.natElim -> buildPi(Builtin.Nat, Builtin.succ, root=Builtin.Nat)
+        Builtin.leqn -> buildPi(Builtin.Nat, Builtin.Nat, root=Builtin.Bool)
+        Builtin.geqn -> buildPi(Builtin.Nat, Builtin.Nat, root=Builtin.Bool)
+        Builtin.eqn -> buildPi(Builtin.Nat, Builtin.Nat, root=Builtin.Bool)
+        Builtin.cond -> buildPi(Builtin.Bool, Builtin.Nat, Builtin.Nat, root=Builtin.Nat)
         Builtin.fixNatF -> fromHeads(
-            const(ctx.getBuiltinVal("Nat")),
             ConstHead(true, null, Icit.Expl, fromHeads(
-                const(ctx.getBuiltinVal("Nat")),
                 ConstHead(true, null, Icit.Expl, getType(Builtin.succ)),
-                ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
+                ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
+                root=const(ctx.getBuiltinVal("Nat")),
             )),
-            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat"))
+            ConstHead(true, null, Icit.Expl, ctx.getBuiltinVal("Nat")),
+            root=const(ctx.getBuiltinVal("Nat")),
         )
     }
 }

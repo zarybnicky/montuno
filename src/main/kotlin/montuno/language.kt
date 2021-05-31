@@ -73,7 +73,18 @@ abstract class Montuno : TruffleLanguage<MontunoContext>() {
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean) = true
     override fun isObjectOfLanguage(obj: Any): Boolean = false
     override fun getScope(ctx: MontunoContext) = ctx.top
-    override fun parse(request: ParsingRequest): CallTarget = parse(request.source) // todo request.argumentNames
+    override fun parse(request: ParsingRequest): CallTarget {
+        if (request.argumentNames.isEmpty()) {
+            return parse(request.source)
+        }
+        return parseInline(request.source.characters.toString(), request.argumentNames)
+    }
+    private fun parseInline(source: String, argNames: List<String>): CallTarget {
+        CompilerAsserts.neverPartOfCompilation()
+        val src = "λ ${argNames.joinToString(separator=" ")}.$source"
+        val root = ProgramRootNode(this, getCurrentContext(this.javaClass), parsePreSyntax(src))
+        return Truffle.getRuntime().createCallTarget(root)
+    }
     fun parse(source: Source): CallTarget {
         CompilerAsserts.neverPartOfCompilation()
         val root = ProgramRootNode(this, getCurrentContext(this.javaClass), parsePreSyntax(source))
