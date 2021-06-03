@@ -3,7 +3,11 @@ package montuno.syntax
 sealed class TopLevel : WithLoc
 data class RDecl(override val loc: Loc, val n: String, val ty: PreTerm) : TopLevel()
 data class RDefn(override val loc: Loc, val n: String, val ty: PreTerm?, val tm: PreTerm) : TopLevel()
-data class RTerm(override val loc: Loc, val cmd: Pragma, val tm: PreTerm?) : TopLevel()
+data class RReset(override val loc: Loc) : TopLevel()
+data class RPrint(override val loc: Loc) : TopLevel()
+data class RBuiltin(override val loc: Loc, val ids: List<String>) : TopLevel()
+data class RCommand(override val loc: Loc, val cmd: Pragma, val tm: PreTerm) : TopLevel()
+data class RTerm(override val loc: Loc, val tm: PreTerm) : TopLevel()
 
 sealed class PreTerm : WithLoc
 

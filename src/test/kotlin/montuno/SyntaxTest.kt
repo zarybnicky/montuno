@@ -24,10 +24,10 @@ class SyntaxTest {
     @Test
     fun testNfTop() {
         assertEquals(
-            parsePreSyntax("%elaborate 5"),
-            listOf(RTerm(
-                Loc.Range(0, 13),
-                Pragma.ELABORATE,
+            parsePreSyntax("{-# PRETTY 5 #-}"),
+            listOf(RCommand(
+                Loc.Range(0, 16),
+                Pragma.PRETTY,
                 RNat(Loc.Range(11, 1), 5)
             )),
         )

@@ -3,6 +3,7 @@ package montuno.interpreter
 import com.oracle.truffle.api.TruffleLanguage
 import montuno.Lvl
 import montuno.Meta
+import montuno.UnifyError
 import montuno.interpreter.scope.*
 import montuno.syntax.Loc
 import montuno.truffle.Compiler
@@ -68,6 +69,20 @@ class MontunoContext(val env: TruffleLanguage.Env) {
         loc = Loc.Unavailable
         ntbl = NameTable()
     }
+    fun printElaborated() {
+        val ctx = makeLocalContext()
+        for (i in top.it.indices) {
+            for ((j, meta) in metas.it[i].withIndex()) {
+                if (!meta.solved) throw UnifyError("Unsolved metablock")
+                if (meta.unfoldable) continue
+                println("  $i.$j = ${ctx.pretty(meta.term!!)}")
+            }
+            val topEntry = top.it[i]
+            print("${topEntry.name} : ${ctx.pretty(topEntry.type)}")
+            if (topEntry.defn != null) print(" = ${ctx.pretty(topEntry.defn)}")
+            println()
+        }
+    }
     fun registerMeta(m: Meta, v: Val) {
         val slot = metas[m]
         slot.solved = true
@@ -78,6 +93,15 @@ class MontunoContext(val env: TruffleLanguage.Env) {
     fun registerTop(name: String, loc: Loc, defn: Term?, type: Term) {
         ntbl.addName(name, NITop(loc, Lvl(top.it.size)))
         top.it.add(TopEntry(name, loc, defn, defn?.eval(this, VEnv()), type, type.eval(this, VEnv())))
+    }
+    fun registerBuiltins(loc: Loc, ids: List<String>) {
+        if ("ALL" in ids) {
+            for (b in Builtin.values()) {
+                getBuiltin(b.name, loc)
+            }
+        } else {
+            ids.forEach { getBuiltin(it, loc) }
+        }
     }
     fun getBuiltin(name: String, loc: Loc = Loc.Unavailable): Pair<Term, Val> {
         val ni = ntbl[name]

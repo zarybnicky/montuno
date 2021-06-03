@@ -13,6 +13,8 @@ import montuno.Ix
 import montuno.Lvl
 import montuno.Meta
 import montuno.interpreter.scope.MetaEntry
+import montuno.interpreter.scope.NameEnv
+import montuno.interpreter.scope.NameTable
 import montuno.interpreter.scope.TopEntry
 import montuno.syntax.Icit
 import montuno.truffle.Closure
@@ -44,7 +46,11 @@ open class Types {
     }
 }
 
+@ExportLibrary(InteropLibrary::class)
 sealed class Val : TruffleObject {
+    @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = toString()
+    override fun toString(): String = quote(Lvl(0), false).pretty(NameEnv(NameTable()), false).toString()
+
     val arity: Int get() = when (this) {
         is VLam -> 1 + closure.arity
         is VPi -> 1 + closure.arity
@@ -211,14 +217,11 @@ class VLam(val name: String?, val icit: Icit, val bound: Val, val closure: Closu
 @ExportLibrary(InteropLibrary::class)
 object VUnit : Val() {
     @ExportMessage fun isNull() = true
-    @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = "VUnit"
-    override fun toString(): String = "VUnit"
 }
 
 @CompilerDirectives.ValueType
 @ExportLibrary(InteropLibrary::class)
 data class VNat(val n: Int) : Val() {
-    @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = "VNat($n)"
     @ExportMessage fun isNumber() = true
     @ExportMessage fun fitsInByte() = n >= Byte.MIN_VALUE && n <= Byte.MAX_VALUE
     @ExportMessage fun fitsInShort() = n >= Short.MIN_VALUE && n <= Short.MAX_VALUE
@@ -239,7 +242,6 @@ data class VNat(val n: Int) : Val() {
 @CompilerDirectives.ValueType
 @ExportLibrary(InteropLibrary::class)
 data class VBool(val n: Boolean) : Val() {
-    @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = "VBool($n)"
     @ExportMessage fun isBoolean() = true
     @ExportMessage fun asBoolean() = n
 }

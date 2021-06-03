@@ -1,0 +1,86 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1622638491,
+        "narHash": "sha256-M8CZbmarXUodyd1JOrqmYtc1oSpU4z0tO5WENpHXbWg=",
+        "path": "/nix/store/s7y5vs6irl3ghlk3xyxxcgjds0r8p5b8-source",
+        "rev": "5285a51c2e0b62c11211ee07692c3a2226f1a4b1",
+        "type": "path"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
+    "normbench": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1618239709,
+        "narHash": "sha256-J/fEi2bgNnyqDlFHaDbfJX16rujNV5ppvb5TGohejVI=",
+        "owner": "zarybnicky",
+        "repo": "normalization-bench",
+        "rev": "6160369b9991ea5b312b539b684b7292a18f7ad3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "zarybnicky",
+        "ref": "master",
+        "repo": "normalization-bench",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "normbench": "normbench",
+        "seafoam": "seafoam",
+        "smalltt": "smalltt"
+      }
+    },
+    "seafoam": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1622638089,
+        "narHash": "sha256-lxTNvHCfMOdyhElQuWpsm2jkVYGqFMkvrGJXiWU4rq0=",
+        "owner": "zarybnicky",
+        "repo": "seafoam",
+        "rev": "7e28bb6d516a9dad5feb10acc4c22c79a1873dda",
+        "type": "github"
+      },
+      "original": {
+        "owner": "zarybnicky",
+        "ref": "master",
+        "repo": "seafoam",
+        "type": "github"
+      }
+    },
+    "smalltt": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1622712881,
+        "narHash": "sha256-Jv4SNfBzZoHrt4+PL/tHZ747eTwX5GNxa3HSEdk3xXM=",
+        "owner": "zarybnicky",
+        "repo": "smalltt",
+        "rev": "783840e3444cbdc7927dd4a940d9c0ad5dc47223",
+        "type": "github"
+      },
+      "original": {
+        "owner": "zarybnicky",
+        "ref": "master",
+        "repo": "smalltt",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

@@ -5,16 +5,20 @@ package montuno;
 
 file : END* decls+=top? (END+ decls+=top)* END* EOF ;
 top
-    : id=IDENT ':' type=term                   #Decl
+    : id=ident ':' type=term                   #Decl
     | id=binder (':' type=term)? '=' defn=term #Defn
-    | '{-#' cmd=IDENT (target=term)? '#-}'   #Pragma
+    | '{-#' 'RESET' '#-}'                      #Reset
+    | '{-#' 'BUILTIN' (ids+=ident)* '#-}'      #Builtin
+    | '{-#' 'PRINT' '#-}'                      #Print
+    | '{-#' cmd term '#-}'                     #Pragma
     | term                                     #Expr
     ;
+cmd : 'PARSE' | 'RAW' | 'PRETTY' | 'NORMAL' | 'TYPE' | 'NORMAL_TYPE' ;
 term : lambda (',' tuple+=term)* ;
 lambda
     : LAMBDA (rands+=lamBind)+ '.' body=lambda #Lam
-    | 'let' IDENT ':' type=term '=' defn=term 'in' body=lambda #LetType
-    | 'let' IDENT '=' defn=term 'in' body=lambda #Let
+    | 'let' ident ':' type=term '=' defn=term 'in' body=lambda #LetType
+    | 'let' ident '=' defn=term 'in' body=lambda #Let
     | (spine+=piBinder)+ ARROW body=lambda     #Pi
     | sigma ARROW body=lambda                  #Fun
     | sigma                                  #LamTerm
@@ -26,13 +30,13 @@ sigma
     ;
 app : proj (args+=arg)* ;
 proj
-    : proj '.' IDENT #ProjNamed
+    : proj '.' ident #ProjNamed
     | proj '.1'      #ProjFst
     | proj '.2'      #ProjSnd
     | atom           #ProjTerm
     ;
 arg
-    : '{' (IDENT '=')? term '}' #ArgImpl
+    : '{' (ident '=')? term '}' #ArgImpl
     | proj                      #ArgExpl
     ;
 piBinder
@@ -42,22 +46,26 @@ piBinder
 lamBind
     : binder                   #LamExpl
     | '{' binder '}'           #LamImpl
-    | '{' IDENT '=' binder '}' #LamName
+    | '{' ident '=' binder '}' #LamName
     ;
 atom
     : '(' term ')'             #Rec
-    | IDENT                    #Var
+    | ident                    #Var
     | '_'                      #Hole
     | ('()' | 'Unit' | 'Type') #Star
-    | NAT                      #Nat
-    | '[' IDENT '|' FOREIGN? '|' term ']' #Foreign
+    | inat                     #Nat
+    | '[' ident '|' FOREIGN? '|' term ']' #Foreign
     ;
 binder
-    : IDENT #Bind
+    : ident #Bind
     | '_' #Irrel
     ;
-IDENT : [a-zA-Z] [a-zA-Z0-9'_]*;
-NAT : [0-9]+;
+ident : LETTER ICHAR*;
+inat: DIGIT+;
+
+LETTER : [a-zA-Z];
+ICHAR : [a-zA-Z0-9'_];
+DIGIT : [0-9];
 
 END : (SEMICOLON | NEWLINE) NEWLINE*;
 fragment SEMICOLON : ';';

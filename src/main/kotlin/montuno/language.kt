@@ -5,11 +5,8 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.RootNode
 import com.oracle.truffle.api.source.Source
-import montuno.interpreter.MontunoContext
-import montuno.interpreter.VUnit
-import montuno.interpreter.checkTopLevel
-import montuno.syntax.TopLevel
-import montuno.syntax.parsePreSyntax
+import montuno.interpreter.*
+import montuno.syntax.*
 import montuno.truffle.PureCompiler
 import montuno.truffle.TruffleCompiler
 import java.io.IOException
@@ -92,23 +89,44 @@ abstract class Montuno : TruffleLanguage<MontunoContext>() {
     }
 }
 
-class ProgramRootNode(l: TruffleLanguage<*>, val ctx: MontunoContext, private val pre: List<TopLevel>) : RootNode(l) {
+class ProgramRootNode(l: TruffleLanguage<*>, val top: MontunoContext, private val pre: List<TopLevel>) : RootNode(l) {
     override fun isCloningAllowed() = true
     @ExplodeLoop
-    override fun execute(frame: VirtualFrame): Any {
+    override fun execute(frame: VirtualFrame): Any? {
         CompilerAsserts.neverPartOfCompilation()
-        val results = mutableListOf<Any>()
+        var res: Any? = null
+        val ctx = top.makeLocalContext()
         for (e in pre) {
-            try {
-                val x = checkTopLevel(ctx, e)
-                if (x != null) results.add(x)
-            } catch (e: RuntimeException) {
-                println(e)
-                throw e
+            top.loc = e.loc
+            when (e) {
+                is RReset -> top.reset()
+                is RPrint -> top.printElaborated()
+                is RDecl -> checkDeclaration(top, e.loc, e.n, e.ty)
+                is RDefn -> checkDefinition(top, e.loc, e.n, e.ty, e.tm)
+                is RBuiltin -> top.registerBuiltins(e.loc, e.ids)
+                is RTerm -> {
+                    val (a, t) = checkTerm(top, e.tm)
+                    res = ctx.eval(a)
+                }
+                is RCommand -> {
+                    if (e.cmd == Pragma.PARSE) {
+                        println(e.tm.toString())
+                        continue
+                    }
+                    val (tm, ty) = ctx.infer(MetaInsertion.No, e.tm)
+                    println(when (e.cmd) {
+                        Pragma.RAW -> ctx.eval(tm)
+                        Pragma.RAW_TYPE -> ty
+                        Pragma.PRETTY -> ctx.pretty(ctx.eval(tm).forceMeta().quote(Lvl(0), false))
+                        Pragma.NORMAL -> ctx.pretty(ctx.eval(tm).forceUnfold().quote(Lvl(0), true))
+                        Pragma.TYPE -> ctx.pretty(ty.forceMeta().quote(Lvl(0), false))
+                        Pragma.NORMAL_TYPE -> ctx.pretty(ty.forceUnfold().quote(Lvl(0), true))
+                        Pragma.PARSE -> {}
+                    })
+                }
             }
         }
-        for (res in results.dropLast(1)) println(res)
-        return if (results.isEmpty()) VUnit else results.last()
+        return res
     }
 }
 

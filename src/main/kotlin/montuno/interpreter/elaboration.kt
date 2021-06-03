@@ -1,10 +1,8 @@
 package montuno.interpreter
 
-import com.oracle.truffle.api.CompilerAsserts
 import montuno.ElabError
 import montuno.Lvl
 import montuno.MetaInsertion
-import montuno.UnifyError
 import montuno.interpreter.scope.Builtin
 import montuno.interpreter.scope.NILocal
 import montuno.interpreter.scope.NITop
@@ -181,81 +179,38 @@ fun getIds(r: PreTerm): List<String> = when (r) {
     else -> throw RuntimeException("Invalid format of a BUILTIN pragma: $r")
 }
 
-fun checkTopLevel(top: MontunoContext, e: TopLevel): Any? {
-    CompilerAsserts.neverPartOfCompilation()
+fun checkDeclaration(top: MontunoContext, loc: Loc, n: String, ty: PreTerm) {
+    top.metas.newMetaBlock()
+    var a = top.makeLocalContext().check(ty, VUnit)
+    top.metas.simplifyMetaBlock()
+    a = top.makeLocalContext().inline(a)
+    top.registerTop(n, loc, null, a)
+}
+
+fun checkDefinition(top: MontunoContext, loc: Loc, n: String, ty: PreTerm?, tm: PreTerm) {
     top.metas.newMetaBlock()
     val ctx = LocalContext(top, LocalEnv(top.ntbl))
-    top.loc = e.loc
-    return when (e) {
-        is RTerm -> when (e.cmd) {
-            Pragma.PARSE -> e.tm.toString()
-            Pragma.RESET -> { top.reset(); null }
-            Pragma.SYMBOLS -> top.top.getMembers().it
-            Pragma.BUILTIN -> {
-                val ids = getIds(e.tm!!)
-                if ("ALL" in ids) {
-                    for (b in Builtin.values()) {
-                        top.getBuiltin(b.name, e.loc)
-                    }
-                } else {
-                    ids.forEach { top.getBuiltin(it, e.loc) }
-                };
-                null
-            }
-            Pragma.PRINT -> {
-                for (i in top.top.it.indices) {
-                    for ((j, meta) in top.metas.it[i].withIndex()) {
-                        if (!meta.solved) throw UnifyError("Unsolved metablock")
-                        if (meta.unfoldable) continue
-                        println("  $i.$j = ${ctx.pretty(meta.term!!)}")
-                    }
-                    val topEntry = top.top.it[i]
-                    print("${topEntry.name} : ${ctx.pretty(topEntry.type)}")
-                    if (topEntry.defn != null) print(" = ${ctx.pretty(topEntry.defn)}")
-                    println()
-                }
-                null
-            }
-            Pragma.RAW -> { println(ctx.infer(MetaInsertion.No, e.tm!!)); null }
-            Pragma.NOTHING -> ctx.pretty(ctx.infer(MetaInsertion.No, e.tm!!).first)
-            Pragma.TYPE -> {
-                val (_, ty) = ctx.infer(MetaInsertion.No, e.tm!!)
-                ctx.pretty(ty.forceMeta().quote(Lvl(0), false))
-            }
-            Pragma.NORMAL_TYPE -> {
-                val (_, ty) = ctx.infer(MetaInsertion.No, e.tm!!)
-                ctx.pretty(ty.forceUnfold().quote(Lvl(0), true))
-            }
-            Pragma.ELABORATE -> {
-                val (tm, _) = ctx.infer(MetaInsertion.No, e.tm!!)
-                ctx.pretty(tm.eval(top, VEnv()).forceMeta().quote(Lvl(0), false))
-            }
-            Pragma.NORMALIZE -> {
-                val (tm, _) = ctx.infer(MetaInsertion.No, e.tm!!)
-                ctx.pretty(tm.eval(top, VEnv()).forceUnfold().quote(Lvl(0), true))
-            }
-        }
-        is RDecl -> {
-            var a = ctx.check(e.ty, VUnit)
-            top.metas.simplifyMetaBlock()
-            a = ctx.inline(a)
-            top.registerTop(e.n, e.loc, null, a)
-            return null
-        }
-        is RDefn -> {
-            var a = if (e.ty != null) {
-                ctx.check(e.ty, VUnit)
-            } else try {
-                ctx.quote(ctx.inferVar(e.n).second, false, Lvl(0))
-            } catch (e: ElabError) {
-                TUnit
-            }
-            var t = ctx.check(e.tm, ctx.eval(a))
-            top.metas.simplifyMetaBlock()
-            a = ctx.inline(a)
-            t = ctx.inline(t)
-            top.registerTop(e.n, e.loc, t, a)
-            return null
-        }
+    var (a, va) = if (ty != null) {
+        val a = ctx.check(ty, VUnit)
+        a to ctx.eval(a)
+    } else try {
+        val va = ctx.inferVar(n).second
+        ctx.quote(va, false, Lvl(0)) to va
+    } catch (e: ElabError) {
+        TUnit to VUnit
     }
+    var t = ctx.check(tm, va)
+    top.metas.simplifyMetaBlock()
+    a = ctx.inline(a)
+    t = ctx.inline(t)
+    top.registerTop(n, loc, t, a)
+}
+
+fun checkTerm(top: MontunoContext, e: PreTerm): Pair<Term, Val> {
+    top.metas.newMetaBlock()
+    val ctx = LocalContext(top, LocalEnv(top.ntbl))
+    var (a, t) = ctx.infer(MetaInsertion.No, e)
+    top.metas.simplifyMetaBlock()
+    a = ctx.inline(a)
+    return a to t
 }

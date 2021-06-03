@@ -133,14 +133,14 @@ class Launcher : AbstractLanguageLauncher() {
             """.trimIndent())
                 null
             }
-            ":elaborate" -> wrapCmd("ELABORATE")
-            ":normalize" -> wrapCmd("NORMALIZE")
+            ":elaborate" -> wrapCmd("PRETTY")
+            ":normalize" -> wrapCmd("NORMAL")
             ":type" -> wrapCmd("TYPE")
             ":normalType" -> wrapCmd("NORMAL_TYPE")
             ":parse" -> wrapCmd("PARSE")
             ":builtin" -> wrapCmd("BUILTIN")
             ":raw" -> wrapCmd("RAW")
-            ":print" -> Source.create(currentLang, "{-# WHOLE_PROGRAM #-}")
+            ":print" -> Source.create(currentLang, "{-# PRINT #-}")
             ":list" -> { ctx.getBindings(currentLang).memberKeys.forEach { println(it) }; null }
             ":reload" -> {
                 ctx.eval(currentLang, "{-# RESET #-}")
