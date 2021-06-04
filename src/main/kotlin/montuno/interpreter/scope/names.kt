@@ -4,15 +4,15 @@ import montuno.Ix
 import montuno.Lvl
 import montuno.syntax.Loc
 import montuno.syntax.WithLoc
-import java.util.*
 
 sealed class NameInfo(val lvl: Lvl) : WithLoc
 class NITop(override val loc: Loc, lvl: Lvl) : NameInfo(lvl)
 class NILocal(override val loc: Loc, lvl: Lvl, val inserted: Boolean) : NameInfo(lvl)
 
-inline class NameTable(val it: HashMap<String, MutableList<NameInfo>> = hashMapOf()) {
+@JvmInline
+value class NameTable(val it: HashMap<String, MutableList<NameInfo>> = hashMapOf()) {
     fun addName(n: String, ni: NameInfo) {
-        val l = it.getOrPut(n, { mutableListOf() })
+        val l = it.getOrPut(n) { mutableListOf() }
         l.add(ni)
     }
     fun withName(n: String, ni: NameInfo): NameTable {
@@ -22,7 +22,7 @@ inline class NameTable(val it: HashMap<String, MutableList<NameInfo>> = hashMapO
         y[n] = l
         return NameTable(y)
     }
-    operator fun get(n: String): List<NameInfo> = it.getOrDefault(n, listOf())
+    operator fun get(n: String): List<NameInfo> = it.getOrDefault(n, mutableListOf())
 }
 
 data class NameEnv(val ntbl: NameTable, val it: List<String> = emptyList()) {

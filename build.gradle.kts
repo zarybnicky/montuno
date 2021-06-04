@@ -17,7 +17,6 @@ buildscript {
 repositories {
     jcenter()
     mavenCentral()
-    maven("https://dl.bintray.com/jannis/kotlin-pretty")
 }
 
 plugins {
@@ -25,8 +24,8 @@ plugins {
     java
     idea
     antlr
-    kotlin("jvm") version "1.4.31"
-    kotlin("kapt") version "1.4.31"
+    kotlin("jvm") version "1.5.10"
+    kotlin("kapt") version "1.5.10"
     id("me.champeau.gradle.jmh") version "0.5.3"
 }
 
@@ -35,6 +34,7 @@ val graalVersion = "21.1.0"
 
 dependencies {
     implementation(kotlin("stdlib"))
+    implementation(kotlin("stdlib-jdk7"))
     implementation(kotlin("reflect"))
 
     jmh("org.openjdk.jmh:jmh-core:1.32")
@@ -42,7 +42,6 @@ dependencies {
 
     antlr("org.antlr:antlr4:4.7.2")
     api("org.antlr:antlr4-runtime:4.7.2")
-    implementation("kotlin-pretty:kotlin-pretty:0.6.0")
 
     implementation("org.jline:jline-builtins:3.19.0")
     implementation("org.jline:jline-console:3.19.0")
@@ -73,6 +72,8 @@ java {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "9"
+    kotlinOptions.apiVersion = "1.5"
+    kotlinOptions.languageVersion = "1.5"
 }
 
 fun <R> SourceSet.kotlin(f: KotlinSourceSet.() -> R): R =
@@ -88,6 +89,7 @@ tasks.generateGrammarSource {
 sourceSets {
     main {
         java.srcDir("build/generated-src/antlr/main")
+        kotlin.srcDir("build/generated-src/antlr/main")
     }
 }
 
@@ -109,7 +111,7 @@ val graalArgs = listOf(
     "--module-path=${compiler.asPath}",
     "--upgrade-module-path=${compiler.asPath}",
 //  "-XX:-UseJVMCIClassLoader",
-    "-Dtruffle.class.path.append=build/libs/montuno.jar",
+    "-Dtruffle.class.path.append=@APP_HOME@/libs/montuno.jar",
     "--add-opens=jdk.internal.vm.compiler/org.graalvm.compiler.truffle.runtime=ALL-UNNAMED",
     "--add-opens=org.graalvm.truffle/com.oracle.truffle.api.source=ALL-UNNAMED",
 
@@ -165,4 +167,10 @@ tasks.getByName<Jar>("jar") {
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.kotlinOptions {
     freeCompilerArgs = listOf("-Xinline-classes")
+}
+tasks.named<CreateStartScripts>("startScripts") {
+    doLast {
+        unixScript.writeText(unixScript.readText().replace("@APP_HOME@", "\$APP_HOME"))
+        windowsScript.writeText(windowsScript.readText().replace("@APP_HOME@", "%~dp0.."))
+    }
 }
