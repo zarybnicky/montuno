@@ -1,57 +1,66 @@
 package montuno
 
-import org.graalvm.polyglot.Context
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.graalvm.polyglot.Value
+import org.junit.jupiter.api.Test
 
-fun makeCtx(): Context = Context.newBuilder().allowExperimentalOptions(true).build()
+abstract class SourceTest {
+    abstract val src: String
+    abstract fun check(x: Value)
+    @Test fun pure() = makeCtx().use { ctx ->
+        val x = ctx.eval("montuno-pure", src)
+        check(x)
+    }
+    @Test fun truffle() = makeCtx().use { ctx ->
+        val x = ctx.eval("montuno", src)
+        check(x)
+    }
+}
 
-class TruffleTest {
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testNormalizeId(lang: String) = makeCtx().use { ctx ->
-        val x = ctx.eval(lang, "id : {A}->A->A = \\x.x; {-# NORMALIZE id #-}")
-        assert(x.asString() == "λ {A} x. x")
+class IdTest : SourceTest() {
+    override val src = "id : {A}->A->A = \\x.x; {-# NORMAL id #-}"
+    override fun check(x: Value) = assert(x.toString() == "λ {A} x. x")
+}
+class IdPartialTest : SourceTest() {
+    override val src: String = "id : {A}->A->A = \\x.x; {-# NORMAL id {Unit} #-}"
+    override fun check(x: Value) = assert(x.toString() == "λ x. x")
+}
+class IdFullTest : SourceTest() {
+    override val src: String = "id : {A}->A->A = \\x.x; {-# NORMAL id {Unit} Unit #-}"
+    override fun check(x: Value) = assert(x.toString() == "Unit")
+}
+class ConstIdTest : SourceTest() {
+    override val src: String = "id:{A}->A->A=\\x.x; const:{A B}->A->B->A=\\x y.x;{-# NORMAL const id #-}"
+    override fun check(x: Value) = assert(x.toString() == "λ y x. x")
+}
+class CountDownTest : SourceTest() {
+    override val src: String = "{-# BUILTIN ALL #-}; {-# NORMAL fixNatF (\\rec x. cond (eqn x 0) 0 (rec (sub x 1))) 1 #-}"
+    override fun check(x: Value) = assert(x.asInt() == 0)
+}
+class CountUpTest : SourceTest() {
+    override val src: String = "{-# BUILTIN ALL #-}; {-# NORMAL fixNatF (\\rec x. cond (leqn 1000 x) x (rec (add x 1))) 0 #-}"
+    override fun check(x: Value) = assert(x.asInt() == 1000)
+}
+class PolyglotCountUpTest : SourceTest() {
+    override val src: String = "{-# BUILTIN ALL #-}; {-# NORMAL fixNatF (\\rec x. cond (leqn 1000 x) x (rec (add x 1))) #-}"
+    override fun check(x: Value) {
+        val res = x.execute(0)
+        assert(res.asInt() == 1000)
     }
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testNormalizeIdPartiallyApplied(lang: String) = makeCtx().use { ctx ->
-        val x = ctx.eval(lang, "id : {A}->A->A = \\x.x; {-# NORMALIZE id {*} #-}")
-        assert(x.asString() == "λ x. x")
-    }
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testNormalizeIdFullyApplied(lang: String) = makeCtx().use { ctx ->
-        val x = ctx.eval(lang, "id : {A}->A->A = \\x.x; {-# NORMALIZE id {*} * #-}")
-        assert(x.asString() == "*")
-    }
+}
+class FibTest : SourceTest() {
+    override val src: String = "{-# BUILTIN ALL #-}; {-# NORMAL fixNatF (\\rec x. cond (leqn x 1) x (add (rec (sub x 1)) (rec (sub x 2)))) 7 #-}"
+    override fun check(x: Value) = assert(x.asInt() == 13)
+}
 
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testCountTo1000(lang: String) = makeCtx().use { ctx ->
-        val x = ctx.eval(lang, "fixNatF (\\rec x. if leq 999 x then x else rec (add x 1)) 0")
-        assert(x.asString() == "1000")
-    }
-
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testPolyglotClosure(lang: String) = makeCtx().use { ctx ->
-        assert(ctx.eval(lang, "\\x.x").execute(5).asInt() == 5)
-    }
-
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testCompile3(lang: String) = makeCtx().use { ctx ->
-        val x = ctx.eval(lang, "id:{A}->A->A=\\x.x; const:{A B}->A->B->A=\\x y.x;{-# NORMALIZE const id #-}")
-        assert(x.asString() == "λ {A} x. x")
-    }
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testConst(lang: String) = makeCtx().use { ctx ->
-        assert(ctx.eval(lang, "const").execute(5, 42).asInt() == 5)
-    }
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testConstId(lang: String) = makeCtx().use { ctx ->
-        assert(ctx.eval(lang, "const id").execute(42, 5).asInt() == 5)
-    }
-    @ParameterizedTest @ValueSource(strings = ["montuno-pure","montuno"])
-    fun testEval(lang: String) {
-        val ctx: Context = Context.create()
-        val src = "fixNatF (\\(f : Nat -> Nat) (x : Nat) -> if le x 1 then x else plus (f (minus x 1)) (f (minus x 2))) 15"
-        val x = ctx.eval(lang, src)
-        assert(x.asInt() == 42)
-    }
+class PolyglotIdTest : SourceTest() {
+    override val src: String = "\\x.x"
+    override fun check(x: Value) = assert(x.execute(5).asInt() == 5)
+}
+class PolyglotConstTest : SourceTest() {
+    override val src: String = "const:{A B}->A->B->A=\\x y.x; {-# NORMAL const #-}"
+    override fun check(x: Value) = assert(x.execute(5).execute(42).asInt() == 5)
+}
+class PolyglotConstIdTest : SourceTest() {
+    override val src: String = "id:{A}->A->A=\\x.x; const:{A B}->A->B->A=\\x y.x; {-# NORMAL const id #-}"
+    override fun check(x: Value) = assert(x.execute(42).execute(5).asInt() == 5)
 }

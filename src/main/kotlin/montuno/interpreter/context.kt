@@ -79,7 +79,8 @@ class MontunoContext(val env: TruffleLanguage.Env) {
             }
             val topEntry = top.it[i]
             print("${topEntry.name} : ${ctx.pretty(topEntry.type)}")
-            if (topEntry.defn != null) print(" = ${ctx.pretty(topEntry.defn)}")
+            val defn = topEntry.defn
+            if (defn != null) print(" = ${ctx.pretty(defn)}")
             println()
         }
     }
@@ -91,8 +92,12 @@ class MontunoContext(val env: TruffleLanguage.Env) {
         slot.value = v
     }
     fun registerTop(name: String, loc: Loc, defn: Term?, type: Term) {
-        ntbl.addName(name, NITop(loc, Lvl(top.it.size)))
-        top.it.add(TopEntry(name, loc, defn, defn?.eval(this, VEnv()), type, type.eval(this, VEnv())))
+        val lvl = Lvl(top.it.size)
+        val topEntry = TopEntry(name, lvl, loc, defn, defn?.eval(this, VEnv()))
+        ntbl.addName(name, NITop(loc, topEntry))
+        top.it.add(topEntry)
+        topEntry.type = type
+        topEntry.typeV = type.eval(this, VEnv())
     }
     fun registerBuiltins(loc: Loc, ids: List<String>) {
         if ("ALL" in ids) {
@@ -106,9 +111,15 @@ class MontunoContext(val env: TruffleLanguage.Env) {
     fun getBuiltin(name: String, loc: Loc = Loc.Unavailable): Pair<Term, Val> {
         val ni = ntbl[name]
         if (ni.isEmpty()) {
-            val (body, type) = builtins.getBuiltin(name)
-            ntbl.addName(name, NITop(loc, Lvl(top.it.size)))
-            top.it.add(TopEntry(name, loc,null, body, type.quote(Lvl(0), false), type))
+            val lvl = Lvl(top.it.size)
+            val topEntry = TopEntry(name, lvl, loc, null, null)
+            ntbl.addName(name, NITop(loc, topEntry))
+            top.it.add(topEntry)
+            val (body, type) = builtins.getBuiltin(topEntry, name)
+            topEntry.defn = null
+            topEntry.defnV = body
+            topEntry.type = type.quote(Lvl(0), false)
+            topEntry.typeV = type
         }
         return makeLocalContext().inferVar(name)
     }

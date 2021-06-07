@@ -84,7 +84,7 @@ fun parsePreSyntaxExpr(input: String): PreTerm {
     val last = src.last()
     if (last !is RTerm) throw RuntimeException("expression must be last")
     var root: PreTerm = last.tm
-    for (l in src.reversed()) {
+    for (l in src.reversed().drop(1)) {
         root = when (l) {
             is RDefn -> RLet(l.loc, l.n, l.ty ?: RHole(Loc.Unavailable), l.tm, root)
             else -> throw RuntimeException("only definitions supported")
@@ -101,7 +101,7 @@ fun MontunoParser.TopContext.toAst(): TopLevel = when (this) {
     is MontunoParser.ResetContext -> RReset(range())
     is MontunoParser.PrintContext -> RPrint(range())
     is MontunoParser.BuiltinContext -> RBuiltin(range(), ids.map { it.text })
-    is MontunoParser.PragmaContext -> RCommand(range(), Pragma.valueOf(cmd().text), term().toAst())
+    is MontunoParser.PragmaContext -> RCommand(range(), Pragma.valueOf(IDENT().text), term().toAst())
     is MontunoParser.ExprContext -> RTerm(range(), term().toAst())
     else -> throw UnsupportedOperationException(javaClass.canonicalName)
 }
@@ -117,8 +117,8 @@ fun MontunoParser.LambdaContext.toAst(): PreTerm = when (this) {
         val (n, ni) = l.toAst()
         RLam(range(), n, ni, r)
     }
-    is MontunoParser.LetTypeContext -> RLet(range(), ident().text, type.toAst(), defn.toAst(), body.toAst())
-    is MontunoParser.LetContext -> RLet(range(), ident().text, null, defn.toAst(), body.toAst())
+    is MontunoParser.LetTypeContext -> RLet(range(), IDENT().text, type.toAst(), defn.toAst(), body.toAst())
+    is MontunoParser.LetContext -> RLet(range(), IDENT().text, null, defn.toAst(), body.toAst())
     is MontunoParser.PiContext -> spine.foldRight(body.toAst()) { l, r -> l.toAst()(r) }
     is MontunoParser.FunContext -> RPi(range(), Unbound, Icit.Expl, sigma().toAst(), body.toAst())
     is MontunoParser.LamTermContext -> sigma().toAst()
@@ -135,7 +135,7 @@ fun MontunoParser.SigmaContext.toAst(): PreTerm = when (this) {
 fun MontunoParser.AppContext.toAst(): PreTerm = args.fold(proj().toAst()) { l, r -> r.toAst()(l) }
 
 fun MontunoParser.ProjContext.toAst(): PreTerm = when (this) {
-    is MontunoParser.ProjNamedContext -> RProjF(range(), proj().toAst(), ident().text)
+    is MontunoParser.ProjNamedContext -> RProjF(range(), proj().toAst(), IDENT().text)
     is MontunoParser.ProjFstContext -> RProj1(range(), proj().toAst())
     is MontunoParser.ProjSndContext -> RProj2(range(), proj().toAst())
     is MontunoParser.ProjTermContext -> atom().toAst()
@@ -144,7 +144,7 @@ fun MontunoParser.ProjContext.toAst(): PreTerm = when (this) {
 
 fun MontunoParser.ArgContext.toAst(): (PreTerm) -> PreTerm = when (this) {
     is MontunoParser.ArgImplContext -> { t ->
-        val arg = if (ident() != null) Named(range(), ident().text) else Unnamed(Icit.Impl)
+        val arg = if (IDENT() != null) Named(range(), IDENT().text) else Unnamed(Icit.Impl)
         RApp(range(), arg, t, term().toAst())
     }
     is MontunoParser.ArgExplContext -> { t -> RApp(range(), Unnamed(Icit.Expl), t, proj().toAst()) }
@@ -154,11 +154,11 @@ fun MontunoParser.ArgContext.toAst(): (PreTerm) -> PreTerm = when (this) {
 fun MontunoParser.PiBinderContext.toAst(): (PreTerm) -> PreTerm = { t -> when (this) {
     is MontunoParser.PiExplContext -> {
         val type = type.toAst()
-        ids.foldRight(t, { l, r -> RPi(range(), Bound(l.text), Icit.Expl, type, r) })
+        ids.foldRight(t) { l, r -> RPi(range(), Bound(l.text), Icit.Expl, type, r) }
     }
     is MontunoParser.PiImplContext -> {
         val type = type?.toAst() ?: RHole(range())
-        ids.foldRight(t, { l, r -> RPi(range(), Bound(l.text), Icit.Impl, type, r) })
+        ids.foldRight(t) { l, r -> RPi(range(), Bound(l.text), Icit.Impl, type, r) }
     }
     else -> throw UnsupportedOperationException(javaClass.canonicalName)
 } }
@@ -166,21 +166,21 @@ fun MontunoParser.PiBinderContext.toAst(): (PreTerm) -> PreTerm = { t -> when (t
 fun MontunoParser.LamBindContext.toAst(): Pair<ArgInfo, Binding> = when (this) {
     is MontunoParser.LamExplContext -> Unnamed(Icit.Expl) to binder().toAst()
     is MontunoParser.LamImplContext -> Unnamed(Icit.Impl) to binder().toAst()
-    is MontunoParser.LamNameContext -> Named(range(), ident().text) to binder().toAst()
+    is MontunoParser.LamNameContext -> Named(range(), IDENT().text) to binder().toAst()
     else -> throw UnsupportedOperationException(javaClass.canonicalName)
 }
 
 fun MontunoParser.AtomContext.toAst(): PreTerm = when (this) {
     is MontunoParser.RecContext -> term().toAst()
-    is MontunoParser.VarContext -> RVar(range(), ident().text)
+    is MontunoParser.VarContext -> RVar(range(), IDENT().text)
     is MontunoParser.HoleContext -> RHole(range())
     is MontunoParser.StarContext -> RU(range())
-    is MontunoParser.NatContext -> RNat(range(), inat().text.toInt())
+    is MontunoParser.NatContext -> RNat(range(), NAT().text.toInt())
     else -> throw UnsupportedOperationException(javaClass.canonicalName)
 }
 
 fun MontunoParser.BinderContext.toAst(): Binding = when (this) {
-    is MontunoParser.BindContext -> Bound(ident().text)
+    is MontunoParser.BindContext -> Bound(IDENT().text)
     is MontunoParser.IrrelContext -> Unbound
     else -> throw UnsupportedOperationException(javaClass.canonicalName)
 }

@@ -13,8 +13,6 @@ import montuno.Ix
 import montuno.Lvl
 import montuno.Meta
 import montuno.interpreter.scope.MetaEntry
-import montuno.interpreter.scope.NameEnv
-import montuno.interpreter.scope.NameTable
 import montuno.interpreter.scope.TopEntry
 import montuno.syntax.Icit
 import montuno.truffle.Closure
@@ -48,19 +46,13 @@ open class Types {
 
 @ExportLibrary(InteropLibrary::class)
 sealed class Val : TruffleObject {
-    @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = toString()
-    override fun toString(): String = quote(Lvl(0), false).pretty(NameEnv(NameTable()), false).toString()
+    //@ExportMessage fun toDisplayString(allowSideEffects: Boolean) = toString()
+    //override fun toString(): String = quote(Lvl(0), false).pretty(NameEnv(NameTable()), false)
 
-    val arity: Int get() = when (this) {
-        is VLam -> 1 + closure.arity
-        is VPi -> 1 + closure.arity
-        is VThunk -> value.arity
-        else -> 0
-    }
     fun app(icit: Icit, r: Val): Val = when (this) {
         is VPi -> closure.inst(r)
         is VLam -> closure.inst(r)
-        is VTop -> VTop(head, spine + SApp(icit, r), slot)
+        is VTop -> VTop(slot, spine + SApp(icit, r))
         is VMeta -> VMeta(head, spine + SApp(icit, r), slot)
         is VLocal -> VLocal(head, spine + SApp(icit, r))
         is VThunk -> value.app(icit, r)
@@ -68,7 +60,10 @@ sealed class Val : TruffleObject {
     }
 
     fun forceUnfold(): Val = when {
-        this is VTop && slot.defnV != null -> spine.applyTo(slot.defnV).forceUnfold()
+        this is VTop -> {
+            val defnV = slot.defnV
+            if (defnV != null) spine.applyTo(defnV) else this
+        }
         this is VMeta && slot.solved -> spine.applyTo(slot.value!!).forceUnfold()
         this is VThunk -> value.forceUnfold()
         else -> this
@@ -81,7 +76,7 @@ sealed class Val : TruffleObject {
     }
 
     fun quote(lvl: Lvl, unfold: Boolean): Term = when (val v = if (unfold) forceUnfold() else forceMeta()) {
-        is VTop -> rewrapSpine(TTop(v.head, v.slot), v.spine, lvl, unfold)
+        is VTop -> rewrapSpine(TTop(v.slot), v.spine, lvl, unfold)
         is VMeta -> rewrapSpine(TMeta(v.head, v.slot, emptyArray()), v.spine, lvl, unfold)
         is VLocal -> rewrapSpine(TLocal(v.head.toIx(lvl)), v.spine, lvl, unfold)
         is VLam -> TLam(v.name, v.icit, v.bound.quote(lvl, unfold), v.closure.inst(VLocal(lvl)).quote(lvl + 1, unfold))
@@ -96,7 +91,7 @@ sealed class Val : TruffleObject {
 
     fun proj1(): Val = when (this) {
         is VPair -> left
-        is VTop -> VTop(head, spine + SProj1, slot)
+        is VTop -> VTop(slot, spine + SProj1)
         is VMeta -> VMeta(head, spine + SProj1, slot)
         is VLocal -> VLocal(head, spine + SProj1)
         is VThunk -> value.proj1()
@@ -104,14 +99,14 @@ sealed class Val : TruffleObject {
     }
     fun proj2(): Val = when (this) {
         is VPair -> right
-        is VTop -> VTop(head, spine + SProj2, slot)
+        is VTop -> VTop(slot, spine + SProj2)
         is VMeta -> VMeta(head, spine + SProj2, slot)
         is VLocal -> VLocal(head, spine + SProj2)
         is VThunk -> value.proj2()
         else -> TODO("impossible")
     }
     fun projF(n: String, i: Int): Val = when (this) {
-        is VTop -> VTop(head, spine + SProjF(n, i), slot)
+        is VTop -> VTop(slot, spine + SProjF(n, i))
         is VMeta -> VMeta(head, spine + SProjF(n, i), slot)
         is VLocal -> VLocal(head, spine + SProjF(n, i))
         is VPair -> if (i == 0) left else right.projF(n, i - 1)
@@ -130,7 +125,8 @@ sealed class Val : TruffleObject {
     }
 }
 
-inline class VEnv(val it: Array<Any?> = emptyArray()) {
+@JvmInline
+value class VEnv(val it: Array<Any?> = emptyArray()) {
     operator fun plus(v: Val) = VEnv(it + v)
     fun skip() = VEnv(it + null)
     operator fun get(lvl: Lvl): Val = it[lvl.it] as Val? ?: VLocal(lvl, VSpine())
@@ -146,7 +142,8 @@ object SProj1 : SpineVal()
 object SProj2 : SpineVal()
 data class SProjF(val n: String, val i: Int): SpineVal()
 data class SApp(val icit: Icit, val v: Val): SpineVal()
-inline class VSpine(val it: Array<SpineVal> = emptyArray()) {
+@JvmInline
+value class VSpine(val it: Array<SpineVal> = emptyArray()) {
     operator fun plus(x: SpineVal) = VSpine(it.plus(x))
     fun applyTo(vi: Val): Val = it.fold(vi) { v, sp -> when (sp) {
         SProj1 -> v.proj1()
@@ -158,7 +155,7 @@ inline class VSpine(val it: Array<SpineVal> = emptyArray()) {
 
 // neutrals
 @CompilerDirectives.ValueType
-class VTop(val head: Lvl, val spine: VSpine, val slot: TopEntry) : Val()
+class VTop(val slot: TopEntry, val spine: VSpine) : Val()
 
 @CompilerDirectives.ValueType
 class VLocal(val head: Lvl, val spine: VSpine = VSpine()) : Val()
@@ -196,20 +193,23 @@ class VPair(val left: Val, val right: Val) : Val()
 @ExportLibrary(InteropLibrary::class)
 class VSg(val name: String?, val bound: Val, val closure: Closure) : Val() {
     @ExportMessage fun isExecutable() = true
-    @ExportMessage fun execute(vararg args: Any?): Any? = closure.execute(args)
+    @ExportMessage fun execute(vararg args: Any?): Any? = closure.executeAny(*args)
 }
 
 @CompilerDirectives.ValueType
 @ExportLibrary(InteropLibrary::class)
 class VPi(val name: String?, val icit: Icit, val bound: Val, val closure: Closure) : Val() {
     @ExportMessage fun isExecutable() = true
-    @ExportMessage fun execute(vararg args: Any?): Any? = closure.execute(args)
+    @ExportMessage fun execute(vararg args: Any?): Any? = closure.executeAny(*args)
 }
 @CompilerDirectives.ValueType
 @ExportLibrary(InteropLibrary::class)
 class VLam(val name: String?, val icit: Icit, val bound: Val, val closure: Closure) : Val() {
     @ExportMessage fun isExecutable() = true
-    @ExportMessage fun execute(vararg args: Any?): Any? = closure.execute(args)
+    @ExportMessage fun execute(vararg args: Any?): Any? {
+        val x = closure.executeAny(*args)
+        return if (x is Val) x.forceUnfold() else x
+    }
 }
 
 

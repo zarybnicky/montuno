@@ -12,13 +12,12 @@ fun Term.pretty(ns: NameEnv, p: Boolean = false): String = when (this) {
     is TUnit -> "Unit"
     is TNat -> n.toString()
     is TBool -> n.toString()
-//    is TForeign -> "[$lang|$code|" + type.pretty(ns, false) + "]"
     is TLet -> {
         val d = ": " + type.pretty(ns, false) + "\n= " + bound.pretty(ns, false)
         val r = "let $name $d\nin " + body.pretty(ns + name, false)
         par(p, r)
     }
-    is TApp -> par(p, lhs.pretty(ns, true) + " " + when (icit) {
+    is TApp -> par(p, lhs.pretty(ns, false) + " " + when (icit) {
         Icit.Impl -> "{" + rhs.pretty(ns, false) + "}"
         Icit.Expl -> rhs.pretty(ns, true)
     })

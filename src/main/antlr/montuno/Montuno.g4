@@ -3,22 +3,21 @@ grammar Montuno;
 package montuno;
 }
 
-file : END* decls+=top? (END+ decls+=top)* END* EOF ;
+file : END* (decls+=top)? (END+ decls+=top)* END* EOF ;
 top
-    : id=ident ':' type=term                   #Decl
+    : id=IDENT ':' type=term                   #Decl
     | id=binder (':' type=term)? '=' defn=term #Defn
     | '{-#' 'RESET' '#-}'                      #Reset
-    | '{-#' 'BUILTIN' (ids+=ident)* '#-}'      #Builtin
+    | '{-#' 'BUILTIN' (ids+=IDENT)* '#-}'      #Builtin
     | '{-#' 'PRINT' '#-}'                      #Print
-    | '{-#' cmd term '#-}'                     #Pragma
+    | '{-#' IDENT term '#-}'                   #Pragma
     | term                                     #Expr
     ;
-cmd : 'PARSE' | 'RAW' | 'PRETTY' | 'NORMAL' | 'TYPE' | 'NORMAL_TYPE' ;
 term : lambda (',' tuple+=term)* ;
 lambda
     : LAMBDA (rands+=lamBind)+ '.' body=lambda #Lam
-    | 'let' ident ':' type=term '=' defn=term 'in' body=lambda #LetType
-    | 'let' ident '=' defn=term 'in' body=lambda #Let
+    | 'let' IDENT ':' type=term '=' defn=term 'in' body=lambda #LetType
+    | 'let' IDENT '=' defn=term 'in' body=lambda #Let
     | (spine+=piBinder)+ ARROW body=lambda     #Pi
     | sigma ARROW body=lambda                  #Fun
     | sigma                                  #LamTerm
@@ -30,13 +29,13 @@ sigma
     ;
 app : proj (args+=arg)* ;
 proj
-    : proj '.' ident #ProjNamed
+    : proj '.' IDENT #ProjNamed
     | proj '.1'      #ProjFst
     | proj '.2'      #ProjSnd
     | atom           #ProjTerm
     ;
 arg
-    : '{' (ident '=')? term '}' #ArgImpl
+    : '{' (IDENT '=')? term '}' #ArgImpl
     | proj                      #ArgExpl
     ;
 piBinder
@@ -46,26 +45,23 @@ piBinder
 lamBind
     : binder                   #LamExpl
     | '{' binder '}'           #LamImpl
-    | '{' ident '=' binder '}' #LamName
+    | '{' IDENT '=' binder '}' #LamName
     ;
 atom
     : '(' term ')'             #Rec
-    | ident                    #Var
+    | IDENT                    #Var
     | '_'                      #Hole
     | ('()' | 'Unit' | 'Type') #Star
-    | inat                     #Nat
-    | '[' ident '|' FOREIGN? '|' term ']' #Foreign
+    | NAT                      #Nat
+    | '[' IDENT '|' FOREIGN? '|' term ']' #Foreign
     ;
-binder
-    : ident #Bind
-    | '_' #Irrel
-    ;
-ident : LETTER ICHAR*;
-inat: DIGIT+;
+binder : IDENT #Bind | '_' #Irrel;
 
-LETTER : [a-zA-Z];
-ICHAR : [a-zA-Z0-9'_];
-DIGIT : [0-9];
+IDENT : LETTER ICHAR*;
+NAT : DIGIT+;
+fragment LETTER : [a-zA-Z];
+fragment ICHAR : [a-zA-Z0-9'_];
+fragment DIGIT : [0-9];
 
 END : (SEMICOLON | NEWLINE) NEWLINE*;
 fragment SEMICOLON : ';';

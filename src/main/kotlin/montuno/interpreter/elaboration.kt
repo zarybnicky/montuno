@@ -77,7 +77,7 @@ fun LocalContext.insertMetas(mi: MetaInsertion, c: Pair<Term, Val>): Pair<Term, 
 fun LocalContext.inferVar(n: String): Pair<Term, Val> {
     for (ni in env.nameTable[n].asReversed()) {
         if (ni is NITop) {
-            return TTop(ni.lvl, ctx.top[ni.lvl]) to ctx.top[ni.lvl].typeV
+            return TTop(ni.slot) to ni.slot.typeV
         }
         if (ni is NILocal && !ni.inserted) {
             return TLocal(ni.lvl.toIx(env.lvl)) to env.types[ni.lvl.it]
@@ -210,7 +210,7 @@ fun checkTerm(top: MontunoContext, e: PreTerm): Pair<Term, Val> {
     top.metas.newMetaBlock()
     val ctx = LocalContext(top, LocalEnv(top.ntbl))
     var (a, t) = ctx.infer(MetaInsertion.No, e)
-    top.metas.simplifyMetaBlock()
+    //top.metas.simplifyMetaBlock()
     a = ctx.inline(a)
     return a to t
 }

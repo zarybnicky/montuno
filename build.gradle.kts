@@ -96,12 +96,19 @@ sourceSets {
 application {
     mainClassName = "montuno.Launcher"
     applicationDefaultJvmArgs = listOf(
+        "-Xss32m",
         "-XX:+UnlockExperimentalVMOptions",
         "-XX:+EnableJVMCI",
         "--module-path=${compiler.asPath}",
         "--upgrade-module-path=${compiler.asPath}",
-        "-Dtruffle.class.path.append=lib/montuno.jar"
+        "-Dtruffle.class.path.append=@APP_HOME@/lib/montuno.jar"
     )
+}
+tasks.getByName<CreateStartScripts>("startScripts") {
+    appendParallelSafeAction {
+        unixScript.writeText(unixScript.readText().replace("@APP_HOME@", "\$APP_HOME"))
+        windowsScript.writeText(windowsScript.readText().replace("@APP_HOME@", "%~dp0.."))
+    }
 }
 
 val graalArgs = listOf(
@@ -110,8 +117,7 @@ val graalArgs = listOf(
     "-XX:+EnableJVMCI",
     "--module-path=${compiler.asPath}",
     "--upgrade-module-path=${compiler.asPath}",
-//  "-XX:-UseJVMCIClassLoader",
-    "-Dtruffle.class.path.append=@APP_HOME@/libs/montuno.jar",
+    "-Dtruffle.class.path.append=libs/montuno.jar",
     "--add-opens=jdk.internal.vm.compiler/org.graalvm.compiler.truffle.runtime=ALL-UNNAMED",
     "--add-opens=org.graalvm.truffle/com.oracle.truffle.api.source=ALL-UNNAMED",
 
@@ -167,10 +173,4 @@ tasks.getByName<Jar>("jar") {
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.kotlinOptions {
     freeCompilerArgs = listOf("-Xinline-classes")
-}
-tasks.named<CreateStartScripts>("startScripts") {
-    doLast {
-        unixScript.writeText(unixScript.readText().replace("@APP_HOME@", "\$APP_HOME"))
-        windowsScript.writeText(windowsScript.readText().replace("@APP_HOME@", "%~dp0.."))
-    }
 }

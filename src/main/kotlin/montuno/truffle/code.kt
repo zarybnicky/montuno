@@ -80,7 +80,7 @@ open class CClosure(
 ) : Code(loc) {
     override fun execute(frame: VirtualFrame): Val {
         val env = buildArgs(frame.materialize())
-        val cl = TruffleClosure(ctx, env, heads, heads.size, callTarget)
+        val cl = TruffleClosure(ctx, env, heads, heads.size + 1, callTarget)
         return if (isPi) VPi(n, icit, type.executeVal(frame), cl) else VLam(n, icit, type.executeVal(frame), cl)
     }
 }

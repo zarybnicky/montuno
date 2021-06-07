@@ -5,9 +5,9 @@ import montuno.Lvl
 import montuno.syntax.Loc
 import montuno.syntax.WithLoc
 
-sealed class NameInfo(val lvl: Lvl) : WithLoc
-class NITop(override val loc: Loc, lvl: Lvl) : NameInfo(lvl)
-class NILocal(override val loc: Loc, lvl: Lvl, val inserted: Boolean) : NameInfo(lvl)
+sealed class NameInfo : WithLoc
+class NITop(override val loc: Loc, val slot: TopEntry) : NameInfo()
+class NILocal(override val loc: Loc, val lvl: Lvl, val inserted: Boolean) : NameInfo()
 
 @JvmInline
 value class NameTable(val it: HashMap<String, MutableList<NameInfo>> = hashMapOf()) {

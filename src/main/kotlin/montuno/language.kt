@@ -94,7 +94,7 @@ class ProgramRootNode(l: TruffleLanguage<*>, val top: MontunoContext, private va
     @ExplodeLoop
     override fun execute(frame: VirtualFrame): Any? {
         CompilerAsserts.neverPartOfCompilation()
-        var res: Any? = null
+        var res: Any? = VUnit
         val ctx = top.makeLocalContext()
         for (e in pre) {
             top.loc = e.loc
@@ -106,7 +106,7 @@ class ProgramRootNode(l: TruffleLanguage<*>, val top: MontunoContext, private va
                 is RBuiltin -> top.registerBuiltins(e.loc, e.ids)
                 is RTerm -> {
                     val (a, t) = checkTerm(top, e.tm)
-                    res = ctx.eval(a)
+                    res = ctx.eval(a).forceUnfold()
                 }
                 is RCommand -> {
                     if (e.cmd == Pragma.PARSE) {
@@ -114,15 +114,21 @@ class ProgramRootNode(l: TruffleLanguage<*>, val top: MontunoContext, private va
                         continue
                     }
                     val (tm, ty) = ctx.infer(MetaInsertion.No, e.tm)
-                    println(when (e.cmd) {
-                        Pragma.RAW -> ctx.eval(tm)
-                        Pragma.RAW_TYPE -> ty
-                        Pragma.PRETTY -> ctx.pretty(ctx.eval(tm).forceMeta().quote(Lvl(0), false))
-                        Pragma.NORMAL -> ctx.pretty(ctx.eval(tm).forceUnfold().quote(Lvl(0), true))
-                        Pragma.TYPE -> ctx.pretty(ty.forceMeta().quote(Lvl(0), false))
-                        Pragma.NORMAL_TYPE -> ctx.pretty(ty.forceUnfold().quote(Lvl(0), true))
-                        Pragma.PARSE -> {}
-                    })
+                    val x: Val? = when (e.cmd) {
+                        Pragma.PRETTY -> ctx.eval(tm).forceMeta()
+                        Pragma.NORMAL -> ctx.eval(tm).forceUnfold()
+                        Pragma.TYPE -> ty.forceMeta()
+                        Pragma.NORMAL_TYPE -> ty.forceUnfold()
+                        else -> null
+                    }
+                    when {
+                        e.cmd == Pragma.RAW -> println(ctx.eval(tm))
+                        e.cmd == Pragma.RAW_TYPE -> println(ty)
+                        x != null -> {
+                            println(ctx.pretty(x.quote(Lvl(0), true)))
+                            res = ctx.eval(x.quote(Lvl(0), true))
+                        }
+                    }
                 }
             }
         }

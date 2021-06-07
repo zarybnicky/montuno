@@ -55,7 +55,7 @@ fun Term.renameSp(occurs: Meta, state: ConvState, ren: Renaming, spine: VSpine):
 }
 fun Val.rename(occurs: Meta, state: ConvState, ren: Renaming): Term {
     return when (val v = if (state == ConvState.Full) forceUnfold() else forceMeta()) {
-        is VTop -> TTop(v.head, v.slot).renameSp(occurs, ConvState.Flex, ren, v.spine)
+        is VTop -> TTop(v.slot).renameSp(occurs, ConvState.Flex, ren, v.spine)
         is VLocal -> {
             if (!ren.ren.containsKey(v.head)) throw UnifyError("Non-local variable")
             TLocal(ren.ren[v.head]!!.toIx(ren.domain)).renameSp(occurs, ConvState.Flex, ren, v.spine)
@@ -108,7 +108,7 @@ fun LocalContext.unify(lvl: Lvl, state: ConvState, a: Val, b: Val) {
     when {
         v is VLocal && w is VLocal && v.head == w.head -> unifySp(lvl, state, v.spine, w.spine)
         v is VMeta && w is VMeta && v.head == w.head -> unifySp(lvl, state, v.spine, w.spine)
-        v is VTop && w is VTop && v.head == w.head -> when (state) {
+        v is VTop && w is VTop && v.slot.lvl == w.slot.lvl -> when (state) {
             ConvState.Rigid -> try {
                 unifySp(lvl, state, v.spine, w.spine)
             } catch (e: UnifyError) {
@@ -118,12 +118,12 @@ fun LocalContext.unify(lvl: Lvl, state: ConvState, a: Val, b: Val) {
             ConvState.Full -> TODO("impossible")
         }
         v is VTop && v.slot.defnV != null -> when (state) {
-            ConvState.Rigid -> unify(lvl, state, v.spine.applyTo(v.slot.defnV), w)
+            ConvState.Rigid -> unify(lvl, state, v.spine.applyTo(v.slot.defnV!!), w)
             ConvState.Flex -> throw UnifyError("cannot unfold")
             ConvState.Full -> TODO("impossible")
         }
         w is VTop && w.slot.defnV != null -> when (state) {
-            ConvState.Rigid -> unify(lvl, state, w.spine.applyTo(w.slot.defnV), v)
+            ConvState.Rigid -> unify(lvl, state, w.spine.applyTo(w.slot.defnV!!), v)
             ConvState.Flex -> throw UnifyError("cannot unfold")
             ConvState.Full -> TODO("impossible")
         }

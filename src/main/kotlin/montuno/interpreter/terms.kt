@@ -21,12 +21,12 @@ data class TProj1(val body: Term) : Term()
 data class TProj2(val body: Term) : Term()
 data class TSg(val name: String?, val bound: Term, val body: Term) : Term()
 data class TLocal(val ix: Ix) : Term() { override fun toString() = "TLocal(ix=${ix.it})" }
-data class TTop(val lvl: Lvl, val slot: TopEntry) : Term() { override fun toString() = "TTop(lvl=${lvl.it})" }
+data class TTop(val slot: TopEntry) : Term() { override fun toString() = "TTop(lvl=${slot.lvl.it})" }
 data class TMeta(val meta: Meta, val slot: MetaEntry, val locals: Array<Boolean>) : Term() { override fun toString() = "TMeta(${meta.i}, ${meta.j})" }
 
 fun rewrapSpine(term: Term, spine: VSpine, lvl: Lvl, unfold: Boolean): Term {
     var x = term
-    for (sp in spine.it.reversedArray()) x = when (sp) {
+    for (sp in spine.it) x = when (sp) {
         SProj1 -> TProj1(x)
         SProj2 -> TProj2(x)
         is SProjF -> TProjF(sp.n, x, sp.i)
@@ -38,7 +38,7 @@ fun rewrapSpine(term: Term, spine: VSpine, lvl: Lvl, unfold: Boolean): Term {
 sealed class Term {
     fun eval(ctx: MontunoContext, env: VEnv): Val = when (this) {
         is TLocal -> env[ix]
-        is TTop -> VTop(lvl, VSpine(), slot)
+        is TTop -> VTop(slot, VSpine())
         is TMeta -> VMeta(meta, VSpine(), slot).appLocals(env, locals)
         is TLet -> body.eval(ctx, env + VThunk { bound.eval(ctx, env) })
         is TPi -> VPi(name, icit, VThunk { bound.eval(ctx, env) }, ctx.compiler.buildClosure(body, env))

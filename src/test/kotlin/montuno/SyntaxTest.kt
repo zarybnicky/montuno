@@ -1,10 +1,8 @@
 package montuno
 
 import montuno.syntax.*
-import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-
 
 class SyntaxTest {
     @Test
@@ -31,15 +29,5 @@ class SyntaxTest {
                 RNat(Loc.Range(11, 1), 5)
             )),
         )
-    }
-
-    @Test
-    fun testEval() {
-        val ctx: Context = Context.create()
-        val x = ctx.eval(
-            "montuno",
-            "fixNatF (\\(f : Nat -> Nat) (x : Nat) -> if le x 1 then x else plus (f (minus x 1)) (f (minus x 2))) 15"
-        )
-        assert(x.asInt() == 42)
     }
 }

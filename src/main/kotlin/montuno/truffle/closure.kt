@@ -19,24 +19,35 @@ import montuno.interpreter.*
 import montuno.syntax.Icit
 import java.util.*
 
-interface Closure {
-    fun inst(v: Val): Val = execute(v)
-    fun execute(vararg args: Any?): Val
-    val arity: Int
-    var callTarget: CallTarget
+abstract class Closure {
+    fun inst(v: Val): Val = execute(v) as Val
+    fun executeAny(vararg args: Any?): Any? = execute(*args.map { x -> when (x) {
+        is Int -> VNat(x)
+        else -> x
+    } }.toTypedArray())
+    abstract fun execute(vararg args: Any?): Any?
+    abstract val callTarget: CallTarget
+}
+
+class PureRootNode(val ctx: MontunoContext, val body: Term, lang: TruffleLanguage<MontunoContext>) : RootNode(lang) {
+    init {
+        callTarget = Truffle.getRuntime().createCallTarget(this)
+    }
+    override fun execute(frame: VirtualFrame): Any? = body.eval(ctx, VEnv(frame.arguments))
 }
 
 @CompilerDirectives.ValueType
 @ExportLibrary(InteropLibrary::class)
-data class PureClosure(val ctx: MontunoContext, val env: VEnv, val body: Term) : TruffleObject, Closure {
-    override val arity: Int = 1
-    override lateinit var callTarget: CallTarget
+data class PureClosure(val ctx: MontunoContext, val env: VEnv, val body: Term) : TruffleObject, Closure() {
+    override val callTarget: CallTarget by lazy { // fallback to Truffle if necessary
+        val (heads, bodyTerm) = stripHeads(body)
+        val body = PureRootNode(ctx, bodyTerm, ctx.top.lang).callTarget
+        TruffleClosure(ctx, env.it, heads, heads.size + 1, body).callTarget
+    }
     @ExportMessage fun isExecutable() = true
     @ExportMessage override fun execute(vararg args: Any?): Val {
-        if (args.isEmpty()) {
-            return body.eval(ctx, env)
-        }
-        return body.eval(ctx, VEnv(concat(env.it, args.map { it as Val }.toTypedArray())))
+        assert(args.size == 1)
+        return body.eval(ctx, VEnv(concat(env.it, args)))
     }
 }
 
@@ -54,12 +65,12 @@ class TruffleClosure (
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1) val papArgs: Array<out Any?>,
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1) val heads: Array<ClosureHead>,
     @JvmField val maxArity: Int,
-    override @CompilerDirectives.CompilationFinal var callTarget: CallTarget
-) : TruffleObject, Closure {
-    override val arity: Int = heads.size + 1
+    override val callTarget: CallTarget
+) : TruffleObject, Closure() {
+    val arity: Int = heads.size + 1
     @ExportMessage fun isExecutable() = true
     @Throws(ArityException::class, UnsupportedTypeException::class)
-    @ExportMessage override fun execute(vararg args: Any?): Val = when {
+    @ExportMessage override fun execute(vararg args: Any?): Any? = when {
         args.isEmpty() -> TODO("impossible")
         args.size < arity -> {
             val newArgs = concat(papArgs, args)
@@ -68,7 +79,7 @@ class TruffleClosure (
             val closure = TruffleClosure(ctx, newArgs, remaining, maxArity, callTarget)
             head.toVal(head.bound.eval(ctx, VEnv(newArgs)), closure)
         }
-        args.size == arity -> callTarget.call(*concat(papArgs, args)) as Val
+        args.size == arity -> callTarget.call(*concat(papArgs, args))
         else -> {
             val resArgs = concat(papArgs, args)
             val g = callTarget.call(*Arrays.copyOfRange(resArgs, 0, maxArity)) as Val
@@ -87,15 +98,15 @@ data class ConstHead(val isPi: Boolean, val name: String?, val icit: Icit, val b
 @CompilerDirectives.ValueType
 @ExportLibrary(InteropLibrary::class)
 class ConstClosure (
-    @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1) val papArgs: Array<out Any?>,
+    @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1) val papArgs: Array<Any?>,
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1) val heads: Array<ConstHead>,
     @JvmField val maxArity: Int,
-    override @CompilerDirectives.CompilationFinal var callTarget: CallTarget
-) : TruffleObject, Closure {
-    override val arity: Int = heads.size + 1
+    override val callTarget: CallTarget
+) : TruffleObject, Closure() {
+    val arity: Int = heads.size + 1
     @ExportMessage fun isExecutable() = true
     @Throws(ArityException::class, UnsupportedTypeException::class)
-    @ExportMessage override fun execute(vararg args: Any?): Val = when {
+    @ExportMessage override fun execute(vararg args: Any?): Any? = when {
         args.isEmpty() -> TODO("impossible")
         args.size < arity -> {
             val newArgs = concat(papArgs, args)
@@ -104,7 +115,7 @@ class ConstClosure (
             val closure = ConstClosure(newArgs, remaining, maxArity, callTarget)
             head.toVal(head.bound, closure)
         }
-        args.size == arity -> callTarget.call(*concat(papArgs, args)) as Val
+        args.size == arity -> callTarget.call(*concat(papArgs, args))
         else -> {
             val resArgs = concat(papArgs, args)
             val g = callTarget.call(*Arrays.copyOfRange(resArgs, 0, maxArity)) as Val
