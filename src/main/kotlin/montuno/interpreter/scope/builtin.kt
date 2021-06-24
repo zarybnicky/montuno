@@ -8,7 +8,6 @@ import com.oracle.truffle.api.dsl.Specialization
 import com.oracle.truffle.api.dsl.TypeSystemReference
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
-import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
 import montuno.interpreter.*
@@ -17,26 +16,8 @@ import montuno.truffle.*
 
 @TypeSystemReference(Types::class)
 class BuiltinRootNode(@field:Child var node: BuiltinNode, lang: TruffleLanguage<*>) : RootNode(lang) {
-    @ExplodeLoop
-    override fun execute(frame: VirtualFrame): Any? {
-        for (i in frame.arguments.indices) {
-            var v = frame.arguments[i]
-            if (v is VThunk) {
-                v = v.value
-            }
-            if (v is VMeta) {
-                v = v.forceMeta()
-            }
-            if (v is VTop) {
-                v = v.forceUnfold()
-            }
-            if (v is VLocal) {
-                return VTop(node.slot, VSpine(frame.arguments.map { x -> SApp(Icit.Expl, x as Val) }.toTypedArray()))
-            }
-            frame.arguments[i] = v
-        }
-        return node.run(frame, frame.arguments)
-    }
+    override fun isCloningAllowed() = true
+    override fun execute(frame: VirtualFrame): Any? = node.run(frame, frame.arguments)
     init {
         callTarget = Truffle.getRuntime().createCallTarget(this)
     }
@@ -46,23 +27,24 @@ class BuiltinRootNode(@field:Child var node: BuiltinNode, lang: TruffleLanguage<
 @ReportPolymorphism
 abstract class BuiltinNode(val slot: TopEntry, val arity: Int) : Node() {
     abstract fun run(frame: VirtualFrame, args: Array<Any?>): Any?
+    fun mkTop(vararg args: Any?) = VTop(slot, VSpine(args.map { x -> SApp(Icit.Expl, x as Val) }.toTypedArray()))
 }
 abstract class Builtin1(slot: TopEntry) : BuiltinNode(slot, 1) {
     abstract fun execute(value: Any?): Any?
     override fun run(frame: VirtualFrame, args: Array<Any?>): Any? = execute(args[args.size - 1])
     @Specialization fun forceTh(value: VThunk) = execute(value.value)
     @Specialization fun forceTt(value: VTop) = execute(value.forceUnfold())
-    @Specialization fun forceM(value: VMeta) = execute(value.forceUnfold())
+    @Specialization fun forceM(value: VMeta) = execute(value.forceMeta())
 }
 abstract class Builtin2(slot: TopEntry) : BuiltinNode(slot, 2) {
     abstract fun execute(left: Any?, right: Any?): Any?
     override fun run(frame: VirtualFrame, args: Array<Any?>): Any? = execute(args[args.size - 2], args[args.size - 1])
     @Specialization fun forceLTh(value: VThunk, r: Any) = execute(value.value, r)
     @Specialization fun forceLTt(value: VTop, r: Any) = execute(value.forceUnfold(), r)
-    @Specialization fun forceLM(value: VMeta, r: Any) = execute(value.forceUnfold(), r)
+    @Specialization fun forceLM(value: VMeta, r: Any) = execute(value.forceMeta(), r)
     @Specialization fun forceRTh(r: Any, value: VThunk) = execute(r, value.value)
     @Specialization fun forceRTt(r: Any, value: VTop) = execute(r, value.forceUnfold())
-    @Specialization fun forceRM(r: Any, value: VMeta) = execute(r, value.forceUnfold())
+    @Specialization fun forceRM(r: Any, value: VMeta) = execute(r, value.forceMeta())
 }
 abstract class Builtin3(slot: TopEntry) : BuiltinNode(slot, 3) {
     abstract fun execute(a: Any?, b: Any?, c: Any?): Any?
@@ -70,33 +52,50 @@ abstract class Builtin3(slot: TopEntry) : BuiltinNode(slot, 3) {
 }
 abstract class SuccBuiltin(slot: TopEntry) : Builtin1(slot) {
     @Specialization fun succ(value: VNat): Val = VNat(value.n + 1)
+    @Specialization fun neutral(value: VLocal): Val = mkTop(value)
 }
 abstract class AddBuiltin(slot: TopEntry) : Builtin2(slot) {
     @Specialization fun add(l: VNat, r: VNat): Val = VNat(l.n + r.n)
+    @Specialization fun neutralL(l: VLocal, r: Any): Val = mkTop(l, r)
+    @Specialization fun neutralR(l: Any, r: VLocal): Val = mkTop(l, r)
 }
 abstract class SubBuiltin(slot: TopEntry) : Builtin2(slot) {
-    @Specialization fun add(l: VNat, r: VNat): Val = VNat(l.n - r.n)
+    @Specialization fun sub(l: VNat, r: VNat): Val = VNat(l.n - r.n)
+    @Specialization fun neutralL(l: VLocal, r: Any): Val = mkTop(l, r)
+    @Specialization fun neutralR(l: Any, r: VLocal): Val = mkTop(l, r)
 }
 abstract class NatElimBuiltin(slot: TopEntry) : Builtin3(slot) {
-    @Specialization fun eq(z: VNat, s: VLam, a: VNat): Val = if (a.n == 0) z else s.app(Icit.Expl, VNat(a.n - 1))
+    @Specialization fun eq(z: Any, s: VLam, a: VNat) = if (a.n == 0) z else s.app(Icit.Expl, VNat(a.n - 1))
     @Specialization fun forceLTh(value: VThunk, r: Any, s: Any) = execute(value.value, r, s)
     @Specialization fun forceLTt(value: VTop, r: Any, s: Any) = execute(value.forceUnfold(), r, s)
-    @Specialization fun forceLM(value: VMeta, r: Any, s: Any) = execute(value.forceUnfold(), r, s)
+    @Specialization fun forceLM(value: VMeta, r: Any, s: Any) = execute(value.forceMeta(), r, s)
+    @Specialization fun neutralL(value: VLocal, r: Any, s: Any) = mkTop(value, r, s)
+    @Specialization fun neutralC(value: Any, r: VLocal, s: Any) = mkTop(value, r, s)
+    @Specialization fun neutralR(value: Any, r: Any, s: VLocal) = mkTop(value, r, s)
 }
 abstract class EqnBuiltin(slot: TopEntry) : Builtin2(slot) {
     @Specialization fun eq(l: VNat, r: VNat): Val = VBool(l.n == r.n)
+    @Specialization fun neutralL(l: VLocal, r: Any): Val = mkTop(l, r)
+    @Specialization fun neutralR(l: Any, r: VLocal): Val = mkTop(l, r)
 }
 abstract class GeqnBuiltin(slot: TopEntry) : Builtin2(slot) {
     @Specialization fun eq(l: VNat, r: VNat): Val = VBool(l.n >= r.n)
+    @Specialization fun neutralL(l: VLocal, r: Any): Val = mkTop(l, r)
+    @Specialization fun neutralR(l: Any, r: VLocal): Val = mkTop(l, r)
 }
 abstract class LeqnBuiltin(slot: TopEntry) : Builtin2(slot) {
     @Specialization fun eq(l: VNat, r: VNat): Val = VBool(l.n <= r.n)
+    @Specialization fun neutralL(l: VLocal, r: Any): Val = mkTop(l, r)
+    @Specialization fun neutralR(l: Any, r: VLocal): Val = mkTop(l, r)
 }
 abstract class CondBuiltin(slot: TopEntry) : Builtin3(slot) {
+    @Specialization fun neutralL(value: VLocal, r: Any, s: Any) = mkTop(value, r, s)
+    @Specialization fun neutralC(value: Any, r: VLocal, s: Any) = mkTop(value, r, s)
+    @Specialization fun neutralR(value: Any, r: Any, s: VLocal) = mkTop(value, r, s)
     @Specialization fun cond(c: VBool, l: Val, r: Val): Val = if (c.n) l else r
     @Specialization fun forceLTh(value: VThunk, r: Any, s: Any) = execute(value.value, r, s)
-    @Specialization fun forceLTt(value: VTop, r: Any, s: Any) = execute(value.forceUnfold(), r, s)
-    @Specialization fun forceLM(value: VMeta, r: Any, s: Any) = execute(value.forceUnfold(), r, s)
+    @Specialization fun forceLTt(value: VTop, r: Any, s: Any) = value.forceUnfold().let { if (it is VTop) mkTop(value, r, s) else execute(it, r, s) }
+    @Specialization fun forceLM(value: VMeta, r: Any, s: Any) = execute(value.forceMeta(), r, s)
 }
 
 @Suppress("LeakingThis")
@@ -108,6 +107,8 @@ abstract class FixNatF(slot: TopEntry, language: TruffleLanguage<*>) : Builtin2(
         val cl = VLam("n", Icit.Expl, VUnit, ConstClosure(arrayOf(f), arrayOf(), 2, target))
         return dispatch.executeDispatch(f.closure.callTarget, arrayOf(cl, n))
     }
+    @Specialization fun neutralL(l: VLocal, r: Any): Val = mkTop(l, r)
+    @Specialization fun neutralR(l: Any, r: VLocal): Val = mkTop(l, r)
 }
 
 enum class Builtin { Nat, Bool, True, False, zero, succ, add, sub, eqn, leqn, geqn, cond, natElim, fixNatF }

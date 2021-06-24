@@ -1,0 +1,3 @@
+comp : {A} {B : A → Unit} {C : {a} → B a → Unit} (f : {a}(b : B a) → C b) (g : (a : A) → B a) (x : A) → C (g x) = λ f g a. f (g a)
+compTest : Nat → Nat = comp succ succ
+--compTest2 : {m A} → A → Vec A m → Vec A (suc (suc m)) = λ a. comp (vcons a) (vcons a)

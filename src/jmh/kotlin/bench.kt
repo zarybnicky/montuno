@@ -11,17 +11,19 @@ import java.util.concurrent.TimeUnit
 
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@OutputTimeUnit(TimeUnit.SECONDS)
+@Warmup(time = 1, batchSize = 1)
+@Measurement(time = 1, batchSize = 1)
 abstract class SourceBenchmark {
     abstract val text: CharSequence
     val pureTarget: Value by lazy {
-        val ctx = Context.create()
+        val ctx = Context.newBuilder().allowExperimentalOptions(true).build()
         ctx.enter()
         ctx.initialize("montuno-pure")
         MontunoPure.lang.parse(Source.newBuilder("montuno-pure", text, "<bench>").build()).call() as Value
     }
     val truffleTarget: Value by lazy {
-        val ctx = Context.create()
+        val ctx = Context.newBuilder().allowExperimentalOptions(true).build()
         ctx.enter()
         ctx.initialize("montuno")
         MontunoTruffle.lang.parse(Source.newBuilder("montuno", text, "<bench>").build()).call() as Value
@@ -36,9 +38,9 @@ open class Add : SourceBenchmark() {
         while (x <= 1000) { x = Math.addExact(x, 1) }
         bh.consume(x)
     }
-    @Benchmark @Warmup(iterations=20)
+    @Benchmark
     fun montunoPure() = pureTarget.execute(1000)
-    @Benchmark @Warmup(iterations=20)
+    @Benchmark
     fun montunoTruffle() = truffleTarget.execute(1000)
 }
 

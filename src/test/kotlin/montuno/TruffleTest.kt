@@ -1,5 +1,6 @@
 package montuno
 
+import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Test
 
@@ -7,12 +8,22 @@ abstract class SourceTest {
     abstract val src: String
     abstract fun check(x: Value)
     @Test fun pure() = makeCtx().use { ctx ->
-        val x = ctx.eval("montuno-pure", src)
-        check(x)
+        try {
+            val x = ctx.eval("montuno-pure", src)
+            check(x)
+        } catch (e: PolyglotException) {
+            println(e)
+            throw e
+        }
     }
     @Test fun truffle() = makeCtx().use { ctx ->
-        val x = ctx.eval("montuno", src)
-        check(x)
+        try {
+            val x = ctx.eval("montuno", src)
+            check(x)
+        } catch (e: PolyglotException) {
+            println(e)
+            throw e
+        }
     }
 }
 

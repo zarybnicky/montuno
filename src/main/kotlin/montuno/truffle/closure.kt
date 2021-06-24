@@ -20,7 +20,7 @@ import montuno.syntax.Icit
 import java.util.*
 
 abstract class Closure {
-    fun inst(v: Val): Val = execute(v) as Val
+    inline fun inst(v: Val): Val = execute(v) as Val
     fun executeAny(vararg args: Any?): Any? = execute(*args.map { x -> when (x) {
         is Int -> VNat(x)
         else -> x
@@ -33,7 +33,7 @@ class PureRootNode(val ctx: MontunoContext, val body: Term, lang: TruffleLanguag
     init {
         callTarget = Truffle.getRuntime().createCallTarget(this)
     }
-    override fun execute(frame: VirtualFrame): Any? = body.eval(ctx, VEnv(frame.arguments))
+    override fun execute(frame: VirtualFrame): Any? =  body.eval(ctx, VEnv(frame.arguments))
 }
 
 @CompilerDirectives.ValueType
@@ -46,8 +46,19 @@ data class PureClosure(val ctx: MontunoContext, val env: VEnv, val body: Term) :
     }
     @ExportMessage fun isExecutable() = true
     @ExportMessage override fun execute(vararg args: Any?): Val {
-        assert(args.size == 1)
-        return body.eval(ctx, VEnv(concat(env.it, args)))
+        val papArgs = env.it
+        val arity = 1
+        val maxArity = papArgs.size + 1
+        return when {
+            args.isEmpty() -> TODO("impossible")
+            args.size == arity -> body.eval(ctx, VEnv(concat(env.it, args)))
+            else -> {
+                val resArgs = concat(papArgs, args)
+                val g = callTarget.call(*Arrays.copyOfRange(resArgs, 0, maxArity)) as Val
+                val rest = Arrays.copyOfRange(resArgs, maxArity, resArgs.size).map { SApp(Icit.Expl, it as Val) }
+                VSpine(rest.toTypedArray()).applyTo(g)
+            }
+        }
     }
 }
 

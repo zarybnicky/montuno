@@ -15,7 +15,7 @@ class LocalContext(val ctx: MontunoContext, val env: LocalEnv) {
     fun eval(t: Term): Val = t.eval(ctx, env.vals)
     fun quote(v: Val, unfold: Boolean, depth: Lvl): Term = v.quote(depth, unfold)
 
-    fun pretty(t: Term): String = t.pretty(NameEnv(ctx.ntbl)).toString()
+    fun pretty(t: Term): String = t.pretty(NameEnv(ctx.ntbl))
     fun inline(t: Term): Term = t.inline(ctx, Lvl(0), env.vals)
 
     fun markOccurs(occurs: IntArray, blockIx: Int, t: Term): Unit = when {

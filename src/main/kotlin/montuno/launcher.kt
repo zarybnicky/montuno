@@ -14,7 +14,6 @@ import org.jline.reader.impl.DefaultParser
 import org.jline.terminal.TerminalBuilder
 import java.io.IOException
 import java.nio.file.Paths
-import java.util.*
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.system.exitProcess
@@ -62,14 +61,12 @@ class Launcher : AbstractLanguageLauncher() {
             exitProcess(-1)
         }
         if (source != null) {
-            var v = ctx.eval(source)
-            if (v.canExecute()) v = v.execute()
+            val v = ctx.eval(source)
             if (!v.isNull) println(v)
         }
         val cmd = initialCommand
         if (cmd != null) {
-            var v = ctx.eval(processCommand(ctx, cmd))
-            if (v.canExecute()) v = v.execute()
+            val v = ctx.eval(processCommand(ctx, cmd))
             if (!v.isNull) println(v)
         }
     }
@@ -94,8 +91,7 @@ class Launcher : AbstractLanguageLauncher() {
                     }
                 }
                 if (source != null) {
-                    var v = ctx.eval(source)
-                    if (v.canExecute()) v = v.execute()
+                    val v = ctx.eval(source)
                     if (!v.isNull) println(v)
                 }
             } catch (e: UserInterruptException) {
@@ -235,13 +231,13 @@ class Launcher : AbstractLanguageLauncher() {
 fun handlePolyglotException(e: PolyglotException) {
     if (e.isExit) exitProcess(e.exitStatus)
     val stackTrace = e.polyglotStackTrace.toMutableList()
-    if (!e.isInternalError) {
-        val iterator = stackTrace.listIterator(stackTrace.size)
-        while (iterator.hasPrevious()) {
-            if (iterator.previous().isHostFrame) iterator.remove()
-            else break
-        }
-    }
+//    if (!e.isInternalError) {
+//        val iterator = stackTrace.listIterator(stackTrace.size)
+//        while (iterator.hasPrevious()) {
+//            if (iterator.previous().isHostFrame) iterator.remove()
+//            else break
+//        }
+//    }
     println(if (e.isHostException) e.asHostException().toString() else e.message)
     stackTrace.forEach { println("  at $it") }
 }

@@ -1,0 +1,7 @@
+Pair : Unit → Unit → Unit = λ A B. (Pair : Unit)(pair : A → B → Pair) → Pair
+pair : {A B} → A → B → Pair A B = λ a b Pair pair. pair a b
+proj1 : {A B} → Pair A B → A = λ p. p _ (λ x y. x)
+proj2 : {A B} → Pair A B → B = λ p. p _ (λ x y. y)
+Top : Unit = (Top : Unit)(tt : Top) → Top
+tt : Top = λ Top tt. tt
+Bot : Unit = (Bot : Unit) → Bot

@@ -13,6 +13,8 @@ import montuno.Ix
 import montuno.Lvl
 import montuno.Meta
 import montuno.interpreter.scope.MetaEntry
+import montuno.interpreter.scope.NameEnv
+import montuno.interpreter.scope.NameTable
 import montuno.interpreter.scope.TopEntry
 import montuno.syntax.Icit
 import montuno.truffle.Closure
@@ -46,8 +48,10 @@ open class Types {
 
 @ExportLibrary(InteropLibrary::class)
 sealed class Val : TruffleObject {
-    //@ExportMessage fun toDisplayString(allowSideEffects: Boolean) = toString()
-    //override fun toString(): String = quote(Lvl(0), false).pretty(NameEnv(NameTable()), false)
+    @ExportMessage fun toDisplayString(allowSideEffects: Boolean) = toString()
+    override fun toString(): String {
+        return quote(Lvl(0), false).pretty(NameEnv(NameTable()), false)
+    }
 
     fun app(icit: Icit, r: Val): Val = when (this) {
         is VPi -> closure.inst(r)
